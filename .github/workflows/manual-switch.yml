@@ -1,0 +1,40 @@
+name: メニューを手動でオン/オフ
+
+on:
+  workflow_dispatch:
+    inputs:
+      product:
+        description: "対象の商品"
+        required: true
+        type: choice
+        options:
+          - 苺大福作り体験
+          - 流しそうめん
+          - 梅仕事体験
+          - 焼き芋
+          - 串本産クエ鍋セット
+      action:
+        description: "オンにする / オフにする"
+        required: true
+        type: choice
+        options: ["on", "off"]
+
+permissions:
+  contents: read
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: コードを取得
+        uses: actions/checkout@v4
+      - name: Python を用意
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 切り替え実行
+        env:
+          STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
+          PRODUCT: ${{ github.event.inputs.product }}
+          ACTION: ${{ github.event.inputs.action }}
+        run: python toggle.py --set "$PRODUCT" "$ACTION"
