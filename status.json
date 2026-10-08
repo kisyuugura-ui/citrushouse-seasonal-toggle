@@ -1,8 +1,8 @@
 {
-  "updated": "2026-10-08T04:38:27Z",
+  "updated": "2026-10-08T19:35:42Z",
   "products": {
     "ichigo-daifuku": false,
-    "nagashi-somen": true,
+    "nagashi-somen": false,
     "umeshigoto": false,
     "yakiimo": false,
     "kue-nabe": false
