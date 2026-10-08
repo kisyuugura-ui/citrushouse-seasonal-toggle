@@ -39,8 +39,20 @@
   - `python toggle.py --calendar-check YYYY-MM-DD` … 日付判定のみ表示(検査用)
 - `.github/workflows/seasonal-toggle.yml` … 毎日 07:17 JST の自動点検
 - `.github/workflows/manual-switch.yml` … 「Actions」から手動でオン/オフ
+- `status.json` … 各商品の実オン/オフ状態。サイトがこれを読んでボタン表示を切り替える
+  (販売中=オレンジ「申し込む」/ 停止中=黒「提供期間外」・押下不可)
+
+## サイトとの連動
+
+食体験サイト(wakayamasyokutaiken.netlify.app)の各ボタンは、公開URL
+`https://raw.githubusercontent.com/kisyuugura-ui/citrushouse-seasonal-toggle/main/status.json`
+を読み、季節商品のボタンを自動で切り替える。toggle.py が Stripe の実状態を
+GitHub Contents API 経由で status.json に書き出す(毎日の点検時と手動切替時)。
+反映はCDNの都合で最大5分程度。サイト側のスラッグは toggle.py の `PRODUCTS` と一致させること。
 
 ## 必要な設定(1回だけ)
 
-Stripeの制限付きAPIキー(支払いリンクの書き込み権限)を、リポジトリの
-**Settings → Secrets and variables → Actions** に `STRIPE_KEY` として登録。
+- Stripeの制限付きAPIキー(支払いリンクの書き込み権限)を、リポジトリの
+  **Settings → Secrets and variables → Actions** に `STRIPE_KEY` として登録。
+- 両ワークフローの `permissions:` は `contents: write`(status.json更新のため)。
+  seasonal-toggle はさらに `issues: write`(開始リマインドのため)。
