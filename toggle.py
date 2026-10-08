@@ -19,19 +19,21 @@ APIキーは環境変数 STRIPE_KEY から、GitHubトークンは GITHUB_TOKEN 
 import os
 import sys
 import json
+import base64
 import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
 
-# (商品名, 決済リンクID, 開始(月,日), 終了(月,日))
+# (商品名, スラッグ, 決済リンクID, 開始(月,日), 終了(月,日))
+# スラッグはサイトのボタン(data-product)と status.json のキーに使う。変更しないこと。
 # 期間は日本時間で判定。12/15〜2/15 のように年をまたぐ場合も自動対応。
 PRODUCTS = [
-    ("苺大福作り体験",     "plink_1TwJQkBgho8oTryN1RKhQZIr", (2, 1),   (5, 31)),
-    ("流しそうめん",       "plink_1TwNdRBgho8oTryNRMClNBko", (6, 1),   (10, 30)),
-    ("梅仕事体験",         "plink_1TwNfvBgho8oTryNhvrTqBxr", (5, 21),  (6, 20)),
-    ("焼き芋",             "plink_1TwNlHBgho8oTryNSsfSe3Dk", (12, 15), (2, 15)),
-    ("串本産クエ鍋セット", "plink_1TwgKyBgho8oTryNeyZ9xGPW", (12, 15), (2, 15)),
+    ("苺大福作り体験",     "ichigo-daifuku", "plink_1TwJQkBgho8oTryN1RKhQZIr", (2, 1),   (5, 31)),
+    ("流しそうめん",       "nagashi-somen",  "plink_1TwNdRBgho8oTryNRMClNBko", (6, 1),   (10, 30)),
+    ("梅仕事体験",         "umeshigoto",     "plink_1TwNfvBgho8oTryNhvrTqBxr", (5, 21),  (6, 20)),
+    ("焼き芋",             "yakiimo",        "plink_1TwNlHBgho8oTryNSsfSe3Dk", (12, 15), (2, 15)),
+    ("串本産クエ鍋セット", "kue-nabe",       "plink_1TwgKyBgho8oTryNeyZ9xGPW", (12, 15), (2, 15)),
 ]
 
 # 開始リマインドを出す「開始日までの残り日数」(1ヶ月前と2週間前)
@@ -159,6 +161,39 @@ def notify_start(name, today, start_md):
     return f"Issue #{created['number']} を新規作成"
 
 
+# ---------- サイト用の販売状態ファイル(status.json) ----------
+
+def write_status(states):
+    """status.json を更新(既存とマージ)。サイトがボタン表示を切り替えるために読む公開ファイル。"""
+    token = os.environ.get("GITHUB_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not token or not repo:
+        print("  (GITHUB_TOKEN未設定のため status.json 更新はスキップ)")
+        return
+    path = f"/repos/{repo}/contents/status.json"
+    sha = None
+    products = {}
+    try:
+        cur = _github("GET", path)
+        sha = cur.get("sha")
+        products = json.loads(base64.b64decode(cur["content"]).decode()).get("products", {})
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+    products.update(states)
+    body = {
+        "updated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "products": products,
+    }
+    content_b64 = base64.b64encode(
+        json.dumps(body, ensure_ascii=False, indent=2).encode()).decode()
+    payload = {"message": "update status.json", "content": content_b64}
+    if sha:
+        payload["sha"] = sha
+    _github("PUT", path, payload)
+    print("  status.json を更新しました")
+
+
 # ---------- 各モード ----------
 
 def now_jst():
@@ -174,7 +209,8 @@ def run_daily():
     skip_stripe = os.environ.get("SKIP_STRIPE") == "1"
     print(f"=== 季節メニュー点検 {today:%Y-%m-%d}(JST){' [テスト:Stripe未接続]' if skip_stripe else ''} ===")
     errors = []
-    for name, plink, s_md, e_md in PRODUCTS:
+    states = {}
+    for name, slug, plink, s_md, e_md in PRODUCTS:
         try:
             if skip_stripe:
                 current = False
@@ -184,6 +220,7 @@ def run_daily():
             action, why = decide(today, current, s_md, e_md)
             if action == "auto_off":
                 stripe_api("POST", "/v1/payment_links/" + plink, {"active": "false"})
+                current = False
                 print(f"  {name}: 無効化しました（終了）")
             elif action == "remind_start":
                 result = notify_start(name, today, s_md)
@@ -191,9 +228,18 @@ def run_daily():
             else:
                 state = "有効" if current else "無効"
                 print(f"  {name}: 変更なし（現在{state}・{why}）")
+            if not skip_stripe:
+                states[slug] = current
         except Exception as e:  # noqa: BLE001
             errors.append(f"{name}: {e}")
             print(f"  [エラー] {name}: {e}", file=sys.stderr)
+    # サイト用の販売状態を実状態で書き出す
+    if not skip_stripe and states:
+        try:
+            write_status(states)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"status.json: {e}")
+            print(f"  [エラー] status.json: {e}", file=sys.stderr)
     if errors:
         print(f"\n{len(errors)}件のエラーが発生しました。", file=sys.stderr)
         sys.exit(1)
@@ -209,7 +255,7 @@ def run_set(name_arg, onoff):
         print(f"該当商品がありません: {name_arg}", file=sys.stderr)
         print("有効な商品名: " + " / ".join(p[0] for p in PRODUCTS), file=sys.stderr)
         sys.exit(1)
-    name, plink = match[0], match[1]
+    name, slug, plink = match[0], match[1], match[2]
     active = "true" if onoff == "on" else "false"
     stripe_api("POST", "/v1/payment_links/" + plink, {"active": active})
     obj = stripe_api("GET", "/v1/payment_links/" + plink)
@@ -218,13 +264,15 @@ def run_set(name_arg, onoff):
     if (obj.get("active") is True) != (onoff == "on"):
         print("反映が確認できませんでした。", file=sys.stderr)
         sys.exit(1)
+    # サイト用の販売状態も更新
+    write_status({slug: bool(obj.get("active"))})
 
 
 def run_calendar_check(date_str):
     today = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     print(f"=== 日付判定チェック {today:%Y-%m-%d} ===")
     print(f"{'商品':<18}{'期間内':<7}{'開始まで':<9}{'ONの時':<14}{'OFFの時'}")
-    for name, _plink, s_md, e_md in PRODUCTS:
+    for name, _slug, _plink, s_md, e_md in PRODUCTS:
         inwin = "はい" if in_window(today, s_md, e_md) else "いいえ"
         dtns = days_to_next(s_md, today)
         if_on, _ = decide(today, True, s_md, e_md)
