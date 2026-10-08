@@ -20,7 +20,7 @@ on:
         options: ["on", "off"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   switch:
