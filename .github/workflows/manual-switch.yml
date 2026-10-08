@@ -35,6 +35,9 @@ jobs:
       - name: 切り替え実行
         env:
           STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRODUCT: ${{ github.event.inputs.product }}
+          ACTION: ${{ github.event.inputs.action }}
+        run: python toggle.py --set "$PRODUCT" "$ACTION"
           ACTION: ${{ github.event.inputs.action }}
         run: python toggle.py --set "$PRODUCT" "$ACTION"
