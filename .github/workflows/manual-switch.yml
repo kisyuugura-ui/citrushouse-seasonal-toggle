@@ -39,5 +39,3 @@ jobs:
           PRODUCT: ${{ github.event.inputs.product }}
           ACTION: ${{ github.event.inputs.action }}
         run: python toggle.py --set "$PRODUCT" "$ACTION"
-          ACTION: ${{ github.event.inputs.action }}
-        run: python toggle.py --set "$PRODUCT" "$ACTION"
