@@ -1,10 +1,10 @@
 {
-  "updated": "2026-10-26T00:23:48Z",
+  "updated": "2026-10-26T13:10:25Z",
   "products": {
     "ichigo-daifuku": false,
     "nagashi-somen": false,
     "umeshigoto": false,
     "yakiimo": false,
-    "kue-nabe": false
+    "kue-nabe": true
   }
 }
