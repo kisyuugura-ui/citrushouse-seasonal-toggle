@@ -2,11 +2,12 @@
 """
 季節限定メニューのStripe決済リンクを管理するスクリプト。ブラウザ不要・Stripe APIを直接呼び出す。
 
-【方針（2026-09-14 変更）】
-- 開始(オンにする)は「承認式」。日付では自動オンにしない。
-  開始予定日の約1ヶ月前から、GitHubのIssueで「そろそろ○○を始める時期です」と知らせる。
-  実際のオンは、依頼者が「○○を始めて」と言ったときに manual-switch から行う。
-- 終了(オフにする)は自動。終了予定日を過ぎたら自動でオフにする(売り止めなので安全)。
+【方針（2026-10-26 変更）】
+- 開始も終了も手動。日付で自動オン・自動オフはしない。
+  オン/オフは依頼者が「○○を始めて／止めて」と言ったときに manual-switch から行う。
+- 開始予定日の約1ヶ月前から、GitHubのIssueで「そろそろ○○を始める時期です」と知らせる(お知らせだけ)。
+- 毎日の点検では Stripe の実状態を読んで status.json(サイトのボタン表示)に反映するだけ。
+（2026-09-14〜10-25 は「終了は自動オフ」だった。AUTO_OFF を True に戻すと復活する）
 - 何かエラーがあれば終了コード1で終わる(→ GitHub Actionsが失敗メールを送る)。
 
 【実行モード】
@@ -35,6 +36,9 @@ PRODUCTS = [
     ("焼き芋",             "yakiimo",        "plink_1TwNlHBgho8oTryNSsfSe3Dk", (12, 15), (2, 15)),
     ("串本産クエ鍋セット", "kue-nabe",       "plink_1TwgKyBgho8oTryNeyZ9xGPW", (12, 15), (2, 15)),
 ]
+
+# 期間外に有効なリンクを自動でオフにするか。2026-10-26 から手動運用のため False。
+AUTO_OFF = False
 
 # 開始リマインドを出す「開始日までの残り日数」(1ヶ月前と2週間前)
 PRE_START_REMIND_DAYS = (28, 14)
@@ -93,7 +97,7 @@ def decide(today, current_active, start_md, end_md):
     dtns = days_to_next(start_md, today)
     if current_active:
         # 期間外で、かつ開始1ヶ月前より前 → 自動オフ(終了処理／季節外れの消し忘れ対策)
-        if (not inwin) and dtns > max(PRE_START_REMIND_DAYS):
+        if AUTO_OFF and (not inwin) and dtns > max(PRE_START_REMIND_DAYS):
             return ("auto_off", "販売期間を過ぎたため無効化")
         return ("none", "販売中(または開始準備中)のため変更なし")
     else:
