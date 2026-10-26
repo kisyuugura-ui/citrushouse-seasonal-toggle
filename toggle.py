@@ -104,7 +104,7 @@ def decide(today, current_active, start_md, end_md):
         # オフのとき: 開始が近い/来ているなら開始リマインド
         dsps = days_since_prev(start_md, today)
         pre = dtns in PRE_START_REMIND_DAYS
-        on_or_after = inwin and (dsps % 7 == 0)  # 開始日と、その後オンにするまで週1
+        on_or_after = inwin and dsps == 0  # 開始日当日のみ（2026-10-26 から週1の再通知は止めた）
         if pre or on_or_after:
             return ("remind_start", "開始時期のお知らせ対象")
         return ("none", "販売期間外のため変更なし")
